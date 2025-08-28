@@ -25,7 +25,7 @@ project/
 │   └── <your_input>_processed.csv
 │
 ├── config.json
-├── driver.py
+├── main.py
 └── README.md
 ```
 
@@ -89,7 +89,7 @@ pip install torch transformers pandas
 Then run:
 
 ```bash
-python driver.py
+python main.py
 ```
 
 ---
