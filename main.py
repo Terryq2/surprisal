@@ -1,10 +1,10 @@
 import os
-
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import pandas as pd
 from pprint import pprint
 import json
+
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 class Driver:
     def __init__(self):
@@ -32,34 +32,37 @@ class Driver:
 
     def to_tokens_and_logprobs(self,
                                input_texts):
-            '''
-            Outputs the log probs of the input texts
-            '''
-            padded = [self.tokenizer.eos_token + self.tokenizer.eos_token + text for text in input_texts]
+        '''
+        Outputs the log probs of the input texts
+        '''
+        padded = [self.tokenizer.eos_token + self.tokenizer.eos_token + text for text in input_texts]
 
-            input_ids = self.tokenizer(padded,
-                                padding=True,
-                                return_tensors="pt").input_ids
-            outputs = self.model(input_ids)
+        input_ids = self.tokenizer(padded,
+                            padding=True,
+                            return_tensors="pt").input_ids
+        outputs = self.model(input_ids)
 
-            probs = torch.log_softmax(outputs.logits, dim=-1).detach()
+        probs = torch.log_softmax(outputs.logits, dim=-1).detach()
 
-            # collect the probability of the generated token -- probability at index 0 corresponds to the token at index 1
-            probs = probs[:, :-1, :]
-            input_ids = input_ids[:, 1:]
-            gen_probs = torch.gather(probs, 2, input_ids[:, :, None]).squeeze(-1)
+        # collect the probability of the generated token -- probability at index 0 corresponds to the token at index 1
+        probs = probs[:, :-1, :]
+        input_ids = input_ids[:, 1:]
+        gen_probs = torch.gather(probs, 2, input_ids[:, :, None]).squeeze(-1)
 
-            batch = []
-            for input_sentence, input_probs in zip(input_ids, gen_probs):
-                text_sequence = []
-                for token, p in zip(input_sentence, input_probs):
-                    if token not in self.tokenizer.all_special_ids:
-                        text_sequence.append((self.tokenizer.decode(token), p.item()))
-                batch.append(text_sequence)
-            return batch
+        batch = []
+        for input_sentence, input_probs in zip(input_ids, gen_probs):
+            text_sequence = []
+            for token, p in zip(input_sentence, input_probs):
+                if token not in self.tokenizer.all_special_ids:
+                    text_sequence.append((self.tokenizer.decode(token), p.item()))
+            batch.append(text_sequence)
+        return batch
     
     def get_all_sentences(self,
                           path: str):
+        """
+        Gets every single sentence in the input csv
+        """
         df: pd.DataFrame = pd.read_csv(path)
 
         all_lists = []
@@ -87,24 +90,30 @@ class Driver:
     def _add_up(self,
                 prelim_results,
                 sentences_raw):
-            result = []
-            for index, raw in enumerate(sentences_raw):
-                word_ptr = 0
-                sentence = prelim_results[index]
-                words_to_match = raw.split()
-                composed_word = ""
-                composed_word_log_prob = 0
-                for partial_words, log_prob in sentence:
-                    composed_word += partial_words.strip()
-                    composed_word_log_prob += -log_prob
-                    if composed_word == words_to_match[word_ptr]:
-                        result.append(composed_word_log_prob)
-                        word_ptr += 1
-                        composed_word = ""
-                        composed_word_log_prob = 0
-            return result
+        """
+        Adds up the OOV vocabs surprisal 
+        """
+        result = []
+        for index, raw in enumerate(sentences_raw):
+            word_ptr = 0
+            sentence = prelim_results[index]
+            words_to_match = raw.split()
+            composed_word = ""
+            composed_word_log_prob = 0
+            for partial_words, log_prob in sentence:
+                composed_word += partial_words.strip()
+                composed_word_log_prob += -log_prob
+                if composed_word == words_to_match[word_ptr]:
+                    result.append(composed_word_log_prob)
+                    word_ptr += 1
+                    composed_word = ""
+                    composed_word_log_prob = 0
+        return result
 
     def write_surprisal(self):
+        """
+        Writes the surprisal of the words of the input file into a seperate column
+        """
         os.makedirs("output_files", exist_ok = True)
 
         for name in self.config['INPUT_FILE_NAMES']:
