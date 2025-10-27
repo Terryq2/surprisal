@@ -9,8 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 class Driver:
     def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained("gpt2", padding_side = "left")
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-
+        self.tokenizer.pad_token = self.tokenizer.bos_token
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, "config.json")
@@ -18,7 +17,7 @@ class Driver:
             self.config = json.load(json_data)
 
         self.model = AutoModelForCausalLM.from_pretrained("gpt2")
-        self.model.config.pad_token_id = self.model.config.eos_token_id
+        self.model.config.pad_token_id = self.model.config.bos_token_id
 
     def conjoin_words(self, word_list: list[str]) -> str:
         """
@@ -35,11 +34,12 @@ class Driver:
         '''
         Outputs the log probs of the input texts
         '''
-        padded = [self.tokenizer.eos_token + self.tokenizer.eos_token + text for text in input_texts]
+        padded = [self.tokenizer.pad_token + text for text in input_texts]
 
-        input_ids = self.tokenizer(padded,
+        encoded = self.tokenizer(padded,
                             padding=True,
-                            return_tensors="pt").input_ids
+                            return_tensors="pt")
+        input_ids = encoded.input_ids
         outputs = self.model(input_ids)
 
         probs = torch.log_softmax(outputs.logits, dim=-1).detach()
@@ -47,6 +47,7 @@ class Driver:
         # collect the probability of the generated token -- probability at index 0 corresponds to the token at index 1
         probs = probs[:, :-1, :]
         input_ids = input_ids[:, 1:]
+
         gen_probs = torch.gather(probs, 2, input_ids[:, :, None]).squeeze(-1)
 
         batch = []
@@ -134,6 +135,7 @@ class Driver:
 if __name__ == "__main__":
     driver = Driver()
     driver.write_surprisal()
+
     
     
     
